@@ -1,7 +1,7 @@
 import { getDB } from "../db/connection.js";
 
 export const loginAdmin = async (req, res, next) => {
-  console.log("DEBUG req.body:", req.body); // Add this line
+  console.log("DEBUG req.body:", req.body);
   const { username, password } = req.body;
 
   try {
@@ -9,16 +9,22 @@ export const loginAdmin = async (req, res, next) => {
     const user = await db.collection("accounts").findOne({ username });
 
     if (!user) {
-      return res.status(404).json({ msg: "Admin not found" });
+      const error = new Error("user not found");
+      error.status = 404;
+      return next(error);
     }
 
     // Optional: Add role check (e.g., admin only)
     if (user.role !== "admin") {
-      return res.status(403).json({ msg: "Unauthorized access" });
+      const error = new Error("Unauthorized access");
+      error.status = 403;
+      return next(error);
     }
 
     if (user.password !== password) {
-      return res.status(401).json({ msg: "Incorrect password" });
+      const error = new Error("Incorrect password");
+      error.status = 401;
+      return next(error);
     }
 
     // Hide password in response
