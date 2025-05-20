@@ -95,3 +95,187 @@ export const buyTicket = async (req, res, next) => {
     return next(error);
   }
 };
+
+export const getAllTickets = async (req, res, next) => {
+  try {
+    const db = getDB();
+
+    // Fetch all tickets, sorted from latest to oldest
+    const tickets = await db
+      .collection("tickets")
+      .find()
+      .sort({ createdAt: -1 }) // Sort by createdAt descending
+      .toArray();
+
+    if (tickets.length === 0) {
+      return res.status(200).json({
+        msg: "No tickets found.",
+        tickets: [],
+        totalTickets: 0,
+      });
+    }
+
+    const ticketDetails = [];
+
+    for (const ticket of tickets) {
+      const ticketID = ticket.ticketID;
+
+      // Fetch paymentAmount for the ticket
+      const payment = await db.collection("payments").findOne({ ticketID });
+      const paymentAmount = payment ? payment.paymentAmount : 0;
+
+      // Fetch seatNumbers for the ticket
+      const reservedSeats = await db
+        .collection("reservedSeats")
+        .find({ ticketID })
+        .toArray();
+      const seatNumbers = reservedSeats.map((seat) => seat.seatNumber);
+
+      // Fetch movietitle using movieID
+      const movie = await db
+        .collection("movies")
+        .findOne({ _id: new ObjectId(ticket.movieID) });
+      const movietitle = movie ? movie.movietitle : "Unknown Movie";
+
+      // Add ticket details
+      ticketDetails.push({
+        ticketID,
+        movietitle,
+        createdAt: ticket.createdAt,
+        ticketStatus: ticket.ticketStatus,
+        paymentAmount,
+        seatNumbers,
+      });
+    }
+
+    res.status(200).json({
+      msg: "Tickets fetched successfully.",
+      tickets: ticketDetails,
+      totalTickets: ticketDetails.length,
+    });
+  } catch (err) {
+    console.error("Error fetching tickets:", err);
+    const error = new Error("An error occurred while fetching tickets.");
+    error.status = 500;
+    return next(error);
+  }
+};
+
+export const updateTicketStatus = async (req, res, next) => {
+  const { ticketID } = req.params;
+  const { ticketStatus } = req.body;
+
+  if (!["Pending", "Paid", "Cancelled", "Expired"].includes(ticketStatus)) {
+    return res.status(400).json({ msg: "Invalid ticket status." });
+  }
+
+  try {
+    const db = getDB();
+    const result = await db
+      .collection("tickets")
+      .updateOne({ ticketID }, { $set: { ticketStatus } });
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ msg: "Ticket not found." });
+    }
+
+    res.status(200).json({ msg: "Ticket status updated successfully." });
+  } catch (err) {
+    console.error("Error updating ticket status:", err);
+    res
+      .status(500)
+      .json({ msg: "An error occurred while updating ticket status." });
+  }
+};
+
+export const searchTickets = async (req, res, next) => {
+  try {
+    const db = getDB();
+    const { q } = req.query;
+    if (!q || q.trim() === "") {
+      return res.status(400).json({ msg: "Search query is required." });
+    }
+
+    const query = q.trim();
+
+    // Find tickets by ticketID (exact), or by movietitle (partial, case-insensitive)
+    // or by seatNumber (partial, case-insensitive)
+    // 1. Find tickets by ticketID or movietitle
+    const movieMatches = await db
+      .collection("movies")
+      .find({ movietitle: { $regex: query, $options: "i" } })
+      .toArray();
+    const movieIDs = movieMatches.map((m) => m._id);
+
+    // 2. Find ticketIDs by seatNumber
+    const reservedMatches = await db
+      .collection("reservedSeats")
+      .find({ seatNumber: { $regex: query, $options: "i" } })
+      .toArray();
+    const ticketIDsBySeat = reservedMatches.map((r) => r.ticketID);
+
+    // 3. Find tickets matching any of the criteria
+    const tickets = await db
+      .collection("tickets")
+      .find({
+        $or: [
+          { ticketID: query }, // exact match for ticketID
+          { movieID: { $in: movieIDs } },
+          { ticketID: { $in: ticketIDsBySeat } },
+        ],
+      })
+      .sort({ createdAt: -1 })
+      .toArray();
+
+    if (tickets.length === 0) {
+      return res.status(200).json({
+        msg: "No tickets found.",
+        tickets: [],
+        totalTickets: 0,
+      });
+    }
+
+    // Build ticket details as in getAllTickets
+    const ticketDetails = [];
+    for (const ticket of tickets) {
+      const ticketID = ticket.ticketID;
+
+      // Payment
+      const payment = await db.collection("payments").findOne({ ticketID });
+      const paymentAmount = payment ? payment.paymentAmount : 0;
+
+      // Seats
+      const reservedSeats = await db
+        .collection("reservedSeats")
+        .find({ ticketID })
+        .toArray();
+      const seatNumbers = reservedSeats.map((seat) => seat.seatNumber);
+
+      // Movie title
+      const movie = await db
+        .collection("movies")
+        .findOne({ _id: new ObjectId(ticket.movieID) });
+      const movietitle = movie ? movie.movietitle : "Unknown Movie";
+
+      ticketDetails.push({
+        ticketID,
+        movietitle,
+        createdAt: ticket.createdAt,
+        ticketStatus: ticket.ticketStatus,
+        paymentAmount,
+        seatNumbers,
+      });
+    }
+
+    res.status(200).json({
+      msg: "Tickets fetched successfully.",
+      tickets: ticketDetails,
+      totalTickets: ticketDetails.length,
+    });
+  } catch (err) {
+    console.error("Error searching tickets:", err);
+    const error = new Error("An error occurred while searching tickets.");
+    error.status = 500;
+    return next(error);
+  }
+};

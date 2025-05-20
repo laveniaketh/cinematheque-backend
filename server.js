@@ -6,6 +6,7 @@ import { connectDB } from "./db/connection.js";
 import userRoutes from "./routes/userRoutes.js";
 import movieRoutes from "./routes/movieRoutes.js";
 import ticketRoutes from "./routes/ticketRoutes.js";
+import dashboardRoutes from "./routes/dashboardRoutes.js";
 
 import logger from "./middleware/logger.js";
 import errorHandler from "./middleware/error.js";
@@ -33,6 +34,7 @@ await connectDB();
 app.use("/api", userRoutes);
 app.use("/api/movies", movieRoutes);
 app.use("/api/tickets", ticketRoutes);
+app.use("/api/dashboard", dashboardRoutes);
 
 // Error Handler
 app.use(notFound);

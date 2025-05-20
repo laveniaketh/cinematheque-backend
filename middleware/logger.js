@@ -1,10 +1,11 @@
 import colors from "colors";
 
-const logger = (req, rest, next) => {
+const logger = (req, res, next) => {
   const methodColors = {
     GET: "green",
     POST: "blue",
     PUT: "yellow",
+    PATCH: "magenta",
     DELETE: "red",
   };
 
